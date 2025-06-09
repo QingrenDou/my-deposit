@@ -124,17 +124,115 @@ public class BankCMBCloudSMServiceImpl implements IBankAdapterService {
     @Override
     public Result<ApplyBackMoneyRespDto> applyBackMoney(ApplyBackMoneyReqDto reqDto, BankConfigRespDto bankConfigRespDto) {
         String logStr = "CMBCloudSM[applyBackMoney]申请退款===>";
+        log.info("{}收到请求: reqDto={}, bankConfigRespDto={}", logStr, JSONUtil.toJsonStr(reqDto), JSONUtil.toJsonStr(bankConfigRespDto));
 
-        //1.转为银行入参
+        // 1.转为银行入参
+        CMBCloudNTOPRDMRReqBodyDto body = new CMBCloudNTOPRDMRReqBodyDto();
 
+        // Populate ntbusmody
+        CMBCloudBusModyReqDto ntbusmodyReqDto = new CMBCloudBusModyReqDto();
+        ntbusmodyReqDto.setBusmod(getBusmod());
+        body.setNtbusmody(List.of(ntbusmodyReqDto));
 
-        //子账号部分
+        // Populate ntoprdmrx1
+        CMBCloudNTOPRDMRReqNtoprdmrx1Dto ntoprdmrx1Dto = new CMBCloudNTOPRDMRReqNtoprdmrx1Dto();
+        ntoprdmrx1Dto.setTrxnbr(reqDto.getOrigTransNo());
+        ntoprdmrx1Dto.setTrsamt(reqDto.getAmount());
+        ntoprdmrx1Dto.setAccnbr(bankConfigRespDto.getMainAccount());
+        ntoprdmrx1Dto.setDumnbr(reqDto.getSubAcc());
 
-        //2.调用银行接口
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd");
+        ntoprdmrx1Dto.setEptdat(dateFormat.format(reqDto.getReqDate() != null ? reqDto.getReqDate() : new Date()));
 
-        //3.解析返回结果
+        ntoprdmrx1Dto.setRpyacc(reqDto.getReceiveAccNo());
+        ntoprdmrx1Dto.setRpynam(reqDto.getReceiveAccName());
+        ntoprdmrx1Dto.setIntflg(Boolean.TRUE.equals(reqDto.getIsRefundInterest()) ? "Y" : "N");
+        ntoprdmrx1Dto.setIntamt(reqDto.getInterestAmount());
 
-        return null;
+        if (StringUtils.isNotBlank(reqDto.getReqNo())) {
+            ntoprdmrx1Dto.setYurref(reqDto.getReqNo());
+        } else {
+            ntoprdmrx1Dto.setYurref(DepositUtil.getSeqNo());
+        }
+
+        if (StringUtils.isNotBlank(reqDto.getPurpose())) {
+            ntoprdmrx1Dto.setNusage(reqDto.getPurpose());
+        } else {
+            ntoprdmrx1Dto.setNusage("资金原路返回交易");
+        }
+        ntoprdmrx1Dto.setBusnar(reqDto.getSummary());
+
+        // Default values for flags
+        ntoprdmrx1Dto.setBckflg("N"); // deprecated, but set default
+        ntoprdmrx1Dto.setApvflg("N"); // Assume "N" for now
+
+        List<CMBCloudNTOPRDMRReqNtoprdmrx1Dto> ntoprdmrx1List = new ArrayList<>();
+        ntoprdmrx1List.add(ntoprdmrx1Dto);
+        body.setNtoprdmrx1(ntoprdmrx1List);
+
+        // Populate ntoprdmrx2 (Conditional)
+        if (StringUtils.isNotBlank(reqDto.getReceiveAccBankAddr()) ||
+            StringUtils.isNotBlank(reqDto.getReceiveAccBankName()) ||
+            StringUtils.isNotBlank(reqDto.getReceiveAccBankNo())) {
+            CMBCloudNTOPRDMRReqNtoprdmrx2Dto ntoprdmrx2Dto = new CMBCloudNTOPRDMRReqNtoprdmrx2Dto();
+            ntoprdmrx2Dto.setRpyadr(reqDto.getReceiveAccBankAddr());
+            ntoprdmrx2Dto.setRpybkn(reqDto.getReceiveAccBankName());
+            ntoprdmrx2Dto.setRpybbn(reqDto.getReceiveAccBankNo());
+            body.setNtoprdmrx2(List.of(ntoprdmrx2Dto));
+            ntoprdmrx1Dto.setApdflg("Y"); // Set apdflg to 'Y' as ntoprdmrx2 is populated
+        } else {
+            ntoprdmrx1Dto.setApdflg("N");
+        }
+
+        // Populate ntoprdmrx3 (Conditional/Optional) - Assuming not critical for now
+        // if (reqDto.getIntprt() != null || reqDto.getDmrprt() != null) {
+        //     CMBCloudNTOPRDMRReqNtoprdmrx3Dto ntoprdmrx3Dto = new CMBCloudNTOPRDMRReqNtoprdmrx3Dto();
+        //     ntoprdmrx3Dto.setIntprt(reqDto.getIntprt());
+        //     ntoprdmrx3Dto.setDmrprt(reqDto.getDmrprt());
+        //     body.setNtoprdmrx3(List.of(ntoprdmrx3Dto));
+        // }
+
+        // 2.调用银行接口
+        String funcode = "NTOPRDMR";
+        CMBCloudBaseRespDto<CMBCloudNTOPRDMRRespBodyDto> rst = postToBank(body, funcode, bankConfigRespDto, logStr, new TypeReference<>() {});
+
+        // 3.解析返回结果
+        if (ObjectUtil.isNull(rst) || ObjectUtil.isNull(rst.getResponse()) ||
+            ObjectUtil.isNull(rst.getResponse().getHead()) || ObjectUtil.isNull(rst.getResponse().getBody())) {
+            log.error("{}申请退款失败[银行返回为空或结构错误]", logStr);
+            return Result.error("申请退款失败[银行返回为空或结构错误]");
+        }
+
+        CMBCloudCommonRespHeadDto respHeadDto = rst.getResponse().getHead();
+        if (ObjectUtil.notEqual(respHeadDto.getResultcode(), SUCCESS_CODE)) {
+            log.error("{}申请退款失败[银行头部返回错误]: code={}, msg={}", logStr, respHeadDto.getResultcode(), respHeadDto.getResultmsg());
+            return Result.error("申请退款失败[" + respHeadDto.getResultmsg() + "]");
+        }
+
+        CMBCloudNTOPRDMRRespBodyDto respBodyDto = rst.getResponse().getBody();
+        if (CollectionUtil.isEmpty(respBodyDto.getNtoprrtnz()) || ObjectUtil.isNull(respBodyDto.getNtoprrtnz().get(0))) {
+            log.error("{}申请退款失败[银行结果集为空或首项为空]", logStr);
+            return Result.error("申请退款失败[银行结果集为空或首项为空]");
+        }
+
+        CMBCloudNTOPRDMRRespNtoprrtnzDto respItem = respBodyDto.getNtoprrtnz().get(0);
+        // SUQP001 表示受理成功，不代表最终成功，需通过“按业务参考号查询结果NTDUMRED”获取请求最终状态
+        // 但对于NTOPRDMR，通常直接返回最终状态
+        if (ObjectUtil.notEqual(respItem.getErrcod(), SUCCESS_CODE)) {
+             // SUC0000 才是最终成功, 其他如 SUQP001 (受理成功) 也视为中间态或失败
+            log.error("{}申请退款业务失败[银行返回错误码]: code={}, msg={}", logStr, respItem.getErrcod(), respItem.getErrtxt());
+            // 不直接返回error，而是将银行的错误信息包装到结果中
+        }
+
+        ApplyBackMoneyRespDto resDto = new ApplyBackMoneyRespDto();
+        resDto.setBankReqNo(respItem.getReqnbr());
+        resDto.setBankStatus(respItem.getReqsts());
+        resDto.setBankCode(respItem.getErrcod());
+        resDto.setBankMessage(respItem.getErrtxt());
+        resDto.setSuccess(ObjectUtil.equal(respItem.getErrcod(), SUCCESS_CODE));
+
+        log.info("{}申请退款成功: resDto={}", logStr, JSONUtil.toJsonStr(resDto));
+        return Result.success(resDto);
     }
 
     /**
