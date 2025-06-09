@@ -136,9 +136,9 @@ public class BankCMBCloudSMServiceImpl implements IBankAdapterService {
 
         // Populate ntoprdmrx1
         CMBCloudNTOPRDMRReqNtoprdmrx1Dto ntoprdmrx1Dto = new CMBCloudNTOPRDMRReqNtoprdmrx1Dto();
-        ntoprdmrx1Dto.setTrxnbr(reqDto.getOrigTransNo());
-        ntoprdmrx1Dto.setTrsamt(reqDto.getAmount());
         ntoprdmrx1Dto.setAccnbr(bankConfigRespDto.getMainAccount());
+       /* ntoprdmrx1Dto.setTrxnbr(reqDto.getOrigTransNo());
+        ntoprdmrx1Dto.setTrsamt(reqDto.getAmount());
         ntoprdmrx1Dto.setDumnbr(reqDto.getSubAcc());
 
         SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd");
@@ -147,20 +147,10 @@ public class BankCMBCloudSMServiceImpl implements IBankAdapterService {
         ntoprdmrx1Dto.setRpyacc(reqDto.getReceiveAccNo());
         ntoprdmrx1Dto.setRpynam(reqDto.getReceiveAccName());
         ntoprdmrx1Dto.setIntflg(Boolean.TRUE.equals(reqDto.getIsRefundInterest()) ? "Y" : "N");
-        ntoprdmrx1Dto.setIntamt(reqDto.getInterestAmount());
+        ntoprdmrx1Dto.setIntamt(reqDto.getInterestAmount());*/
 
-        if (StringUtils.isNotBlank(reqDto.getReqNo())) {
-            ntoprdmrx1Dto.setYurref(reqDto.getReqNo());
-        } else {
             ntoprdmrx1Dto.setYurref(DepositUtil.getSeqNo());
-        }
 
-        if (StringUtils.isNotBlank(reqDto.getPurpose())) {
-            ntoprdmrx1Dto.setNusage(reqDto.getPurpose());
-        } else {
-            ntoprdmrx1Dto.setNusage("资金原路返回交易");
-        }
-        ntoprdmrx1Dto.setBusnar(reqDto.getSummary());
 
         // Default values for flags
         ntoprdmrx1Dto.setBckflg("N"); // deprecated, but set default
@@ -171,18 +161,7 @@ public class BankCMBCloudSMServiceImpl implements IBankAdapterService {
         body.setNtoprdmrx1(ntoprdmrx1List);
 
         // Populate ntoprdmrx2 (Conditional)
-        if (StringUtils.isNotBlank(reqDto.getReceiveAccBankAddr()) ||
-            StringUtils.isNotBlank(reqDto.getReceiveAccBankName()) ||
-            StringUtils.isNotBlank(reqDto.getReceiveAccBankNo())) {
-            CMBCloudNTOPRDMRReqNtoprdmrx2Dto ntoprdmrx2Dto = new CMBCloudNTOPRDMRReqNtoprdmrx2Dto();
-            ntoprdmrx2Dto.setRpyadr(reqDto.getReceiveAccBankAddr());
-            ntoprdmrx2Dto.setRpybkn(reqDto.getReceiveAccBankName());
-            ntoprdmrx2Dto.setRpybbn(reqDto.getReceiveAccBankNo());
-            body.setNtoprdmrx2(List.of(ntoprdmrx2Dto));
-            ntoprdmrx1Dto.setApdflg("Y"); // Set apdflg to 'Y' as ntoprdmrx2 is populated
-        } else {
             ntoprdmrx1Dto.setApdflg("N");
-        }
 
         // Populate ntoprdmrx3 (Conditional/Optional) - Assuming not critical for now
         // if (reqDto.getIntprt() != null || reqDto.getDmrprt() != null) {
@@ -225,11 +204,6 @@ public class BankCMBCloudSMServiceImpl implements IBankAdapterService {
         }
 
         ApplyBackMoneyRespDto resDto = new ApplyBackMoneyRespDto();
-        resDto.setBankReqNo(respItem.getReqnbr());
-        resDto.setBankStatus(respItem.getReqsts());
-        resDto.setBankCode(respItem.getErrcod());
-        resDto.setBankMessage(respItem.getErrtxt());
-        resDto.setSuccess(ObjectUtil.equal(respItem.getErrcod(), SUCCESS_CODE));
 
         log.info("{}申请退款成功: resDto={}", logStr, JSONUtil.toJsonStr(resDto));
         return Result.success(resDto);
@@ -345,6 +319,25 @@ public class BankCMBCloudSMServiceImpl implements IBankAdapterService {
      */
     public Result<RefreshBackMoneyStatusRespDto> refreshBackMoneyStatus(RefreshBackMoneyStatusReqDto reqDto, BankConfigRespDto bankConfigRespDto) {
         String logStr = "CMBCloudSM[refreshBackMoneyStatus]更新退款状态===>";
+
+        //1.转为银行入参
+
+        //2.调用银行接口
+
+        //3.解析返回结果
+
+        return Result.success();
+    }
+
+    /**
+     * 刷新历史交易流水
+     *
+     * @param reqDto 刷新参数
+     * @param bankConfigRespDto 银行配置
+     * @return 刷新结果
+     */
+    public Result refreshRecordListHis(RefreshRecordListHisReqDto reqDto, BankConfigRespDto bankConfigRespDto) {
+        String logStr = "CMBCloudSM[refreshRecordListHis]更新历史数据===>";
 
         //1.转为银行入参
 
