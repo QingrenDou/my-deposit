@@ -1,0 +1,131 @@
+2.1记账子单元原路退回NTOPRDMR
+使用场景
+本功能主要是提供给客户进行记账子单元退款，实现记账子单元交易原路退回。
+
+使用说明
+1、请客户控制不要发重复退款。（注意：如果是同一笔退款，要重发时请保证请求报文里面的业务参考号字段和之前请求里面的业务参考号一致，否则存在重复提交的风险。）
+2、退款状态检查：
+退款中不能再次发起退款；
+退款失败、退票后可以再次发起退款；
+3、记账子单元收款支持渠道：
+行内：记账子单元柜台转账、网银支付、直连支付；
+行外：人行大小额、超级网银；
+记账子单元退款取原收款交易，原路退回，目前柜台存现交易取不到收方信息，无法进行退款，其他交易渠道收均可以进行退款。如果原交易中付方信息部分缺失，可能导致退款失败或者被退票，请通过补充信息重新发起退款，或者通过“通用企银支付单笔经办BB1PAYOP”支付接口将资金退回。
+
+请求报文
+接口名称	接口ID	数据类型	是否必输	描述
+输入接口	ntbusmody	JSONArray	Y	见下面ntbusmody
+输入接口	ntoprdmrx1	JSONArray	Y	见下面ntoprdmrx1
+输入接口	ntoprdmrx2	JSONArray		见下面ntoprdmrx2
+输入接口	ntoprdmrx3	JSONArray		见下面ntoprdmrx3
+ntbusmody(单记录)
+字段名称	字段ID	数据类型	是否必输	描述
+业务模式编号	busmod	String(5)	Y	
+ntoprdmrx1(单记录)
+字段名称	字段ID	数据类型	是否必输	描述
+原交易套号	setnbr	String(15)		
+原交易流水号	trxnbr	String(15)	Y	
+交易金额	trsamt	M	Y	不退本金可退利息，本金可为0
+主账号	accnbr	String(35)	Y	
+记账子单元编号	dumnbr	String(20)	Y	
+退款日期	eptdat	D	Y	
+原付方账号	rpyacc	String(35)	Y	
+原付方名称	rpynam	Z(200)	Y	
+是否退息	intflg	String(1)	Y	Y:退息，N：不退息
+利息	intamt	M	Y	退息时必须大于0，不退息时必须为0
+用途	nusage	Z(62)		本字段会记录在记账子单元交易的摘要中
+为空默认为“资金原路返回交易”
+客户摘要	busnar	Z(200)		
+业务参考号	yurref	String(30)	Y	可通过“按业务参考号查询结果NTDUMRED”获取请求最终状态
+部分退款标志	bckflg	String(1)		Y：部分退款，N：全额退款
+为空则默认为N：全额退款
+（产品升级后支持多次部分退款，该字段失效，系统自动根据退款本金判断）
+附加标志	apdflg	String(1)		可空，附加标志传Y，必须输入NTOPRDMRX2接口。如果原交易的付方地址为空，允许客户通过NTOPRDMRX2补录地址、名称、行号
+是否需要审批	apvflg	String(1)		Y：需要审批，此时业务模式必需带审批岗
+N/空：不需要审批，此时业务模式必须为0审批
+ntoprdmrx2(单记录)
+字段名称	字段ID	数据类型	是否必输	描述
+收付方开户行地址	rpyadr	Z(100)	Y	
+收付方开户行行名称	rpybkn	Z(62)		
+收付方开户行行号	rpybbn	String(20)		行内可不传，行外转账：联行号
+ntoprdmrx3(单记录)
+字段名称	字段ID	数据类型	是否必输	描述
+是否需要利息回单	intprt	String(1)		Y：是 N：否
+退款回单是否附加备注	dmrprt	String(1)		Y：是 N：否（如是，显示详细的本金和利息）
+
+响应报文
+接口名称	接口ID	数据类型	是否必输	描述
+详细信息	ntoprrtnz	JSONArray		见下方ntoprrtnz
+ntoprrtnz(单记录)
+字段名称	字段ID	数据类型	是否必输	描述
+流水号	sqrnbr	String(10)		
+流程实例号	reqnbr	String(10)	Y	通过“详情查询NTDUMINF”获取请求最终状态
+请求状态	reqsts	String(3)	Y	BNK：银行处理中 FIN：完成
+待处理操作序列	oprsqn	String(3)		
+操作别名	oprals	Z(32)		
+业务处理结果	rtnflg	String(1)		F：失败
+错误码	errcod	String(7)	Y	
+错误文本	errtxt	Z(92)		
+
+请求报文范例
+{
+    "request": {
+        "body": {
+            "ntbusmody": [
+                {
+                    "busmod": "00001"
+                }
+            ],
+            "ntoprdmrx1": [
+                {
+                    "setnbr": "G41034S102AAAEJ",
+                    "trxnbr": "G4103400000009C",
+                    "trsamt": "18",
+                    "accnbr": "769900019310307",
+                    "dumnbr": "00000",
+                    "eptdat": "20201104",
+                    "rpyacc": "769900002110408",
+                    "rpynam": "CC",
+                    "intflg": "N",
+                    "intamt": "0",
+                    "yurref": "1021000999960612143711187334",
+                    "apdflg": "N"
+                }
+            ],
+            "ntoprdmrx2": [
+                {
+                    "rpyadr": "招商银行东莞分行"
+                }
+            ]
+        },
+        "head": {
+            "funcode": "NTOPRDMR",
+            "userid": "N000086168"
+        }
+    }
+}
+
+响应报文范例
+{
+    "response": {
+        "body": {
+            "ntoprrtnz": [
+                {
+                    "errcod": "SUC0000",
+                    "reqnbr": "0003088631",
+                    "reqsts": "NTE"
+                }
+            ]
+        },
+        "head": {
+            "bizcode": "",
+            "funcode": "NTOPRDMR",
+            "reqid": "20201104171200703199843252900D86193CDB4",
+            "resultcode": "SUC0000",
+            "resultmsg": "",
+            "rspid": "20201104171203723000100180374319-LW",
+            "userid": "N000086168"
+        }
+    }
+}
+
