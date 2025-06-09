@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: yzc-deposit
+  profiles:
+    active: @profile.active@
+

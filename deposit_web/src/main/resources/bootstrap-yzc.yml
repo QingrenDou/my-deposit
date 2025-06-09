@@ -1,0 +1,41 @@
+spring:
+  application:
+    name: yzc-deposit
+  cloud:
+    nacos:
+      discovery:
+        server-addr: http://localhost:8848/
+        group: yzc
+        namespace: dev
+      config:
+        server-addr: ${spring.cloud.nacos.discovery.server-addr}
+        file-extension: yaml
+        group: ${spring.cloud.nacos.discovery.group}
+        namespace: ${spring.cloud.nacos.discovery.namespace}
+        extension-configs:
+          - data-id: yzc-deposit-base.yaml
+            group: yzc
+            refresh: true
+          - data-id: yzc-api.yaml
+            group: yzc
+            refresh: true
+          - data-id: yzc-redis.yaml
+            group: yzc
+            refresh: true
+          - data-id: yzc-bs-api.yaml
+            group: yzc
+            refresh: true
+          - data-id: yzc-common.yaml
+            group: yzc
+            refresh: true
+
+feign:
+  httpclient:
+    enabled: false
+  okhttp:
+    enabled: true
+  client:
+    config:
+      default:
+        connect-timeout: 10000 #服务请求连接超时时间（毫秒）
+        read-timeout: 10000 #服务请求处理超时时间（毫秒）

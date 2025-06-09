@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yzc.deposit.repository.mapper.guar.GuarTypeConfigMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.yzc.common.guar.entity.GuarTypeConfig">
+        <id column="id" property="id" />
+        <result column="guar_type_code" property="guarTypeCode" />
+        <result column="finance_org_name" property="financeOrgName" />
+        <result column="payee_name" property="payeeName" />
+        <result column="api_url" property="apiUrl" />
+        <result column="del_status" property="delStatus" />
+        <result column="finance_mode" property="financeMode" />
+    </resultMap>
+
+</mapper>

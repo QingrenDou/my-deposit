@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yzc.deposit.repository.mapper.guar.GuarPayMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.yzc.common.guar.entity.GuarPay">
+        <id column="guar_pay_id" property="guarPayId" />
+        <result column="lg_no" property="lgNo" />
+        <result column="enterprise_name" property="enterpriseName" />
+        <result column="credit_code" property="creditCode" />
+        <result column="pay_status" property="payStatus" />
+        <result column="payment_id" property="paymentId" />
+        <result column="payment_no" property="paymentNo" />
+        <result column="order_amt" property="orderAmt" />
+        <result column="amount" property="amount" />
+        <result column="account_name" property="accountName" />
+        <result column="account_no" property="accountNo" />
+        <result column="branch_name" property="branchName" />
+        <result column="pay_chnl" property="payChnl" />
+        <result column="pay_way" property="payWay" />
+        <result column="is_coupon" property="isCoupon" />
+        <result column="reduce_amt" property="reduceAmt" />
+        <result column="acct_time" property="acctTime" />
+        <result column="create_time" property="createTime" />
+        <result column="update_time" property="updateTime" />
+        <result column="del_status" property="delStatus" />
+    </resultMap>
+
+</mapper>

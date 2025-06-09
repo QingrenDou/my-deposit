@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yzc.deposit.repository.mapper.guar.GuarInfoMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.yzc.common.guar.entity.GuarInfo">
+        <id column="guar_info_id" property="guarInfoId" />
+        <result column="yzc_busi_type" property="yzcBusiType" />
+        <result column="project_id" property="projectId" />
+        <result column="project_no" property="projectNo" />
+        <result column="company_id" property="companyId" />
+        <result column="company_name" property="companyName" />
+        <result column="project_name" property="projectName" />
+        <result column="signup_end_time" property="signupEndTime" />
+        <result column="bidder_id" property="bidderId" />
+        <result column="bidder_name" property="bidderName" />
+        <result column="hanhua_busi_type" property="hanhuaBusiType" />
+        <result column="financial_id" property="financialId" />
+        <result column="credit_code" property="creditCode" />
+        <result column="legal_name" property="legalName" />
+        <result column="legal_cert_no" property="legalCertNo" />
+        <result column="lg_no" property="lgNo" />
+        <result column="tenderee" property="tenderee" />
+        <result column="guarantee_amount" property="guaranteeAmount" />
+        <result column="operator_name" property="operatorName" />
+        <result column="operator_cert_no" property="operatorCertNo" />
+        <result column="operator_phone" property="operatorPhone" />
+        <result column="busi_license_att_rela_id" property="busiLicenseAttRelaId" />
+        <result column="idcard_front_att_rela_id" property="idcardFrontAttRelaId" />
+        <result column="idcard_back_att_rela_id" property="idcardBackAttRelaId" />
+        <result column="apply_status" property="applyStatus" />
+        <result column="apply_user_id" property="applyUserId" />
+        <result column="apply_user_name" property="applyUserName" />
+        <result column="apply_time" property="applyTime" />
+        <result column="pay_url" property="payUrl" />
+        <result column="pay_amount" property="payAmount" />
+        <result column="pay_account_name" property="payAccountName" />
+        <result column="pay_account_no" property="payAccountNo" />
+        <result column="pay_status" property="payStatus" />
+        <result column="pay_time" property="payTime" />
+        <result column="pay_update_time" property="payUpdateTime" />
+        <result column="open_status" property="openStatus" />
+        <result column="audit_opinion" property="auditOpinion" />
+        <result column="guarantee_file_url" property="guaranteeFileUrl" />
+        <result column="guarantee_number" property="guaranteeNumber" />
+        <result column="guarantee_code" property="guaranteeCode" />
+        <result column="open_time" property="openTime" />
+        <result column="open_update_time" property="openUpdateTime" />
+        <result column="letter_expire_start_time" property="letterExpireStartTime" />
+        <result column="letter_expire_end_time" property="letterExpireEndTime" />
+        <result column="rate" property="rate" />
+        <result column="ensure_type" property="ensureType" />
+        <result column="finance_org_name" property="financeOrgName" />
+        <result column="dec_status" property="decStatus" />
+        <result column="dec_time" property="decTime" />
+        <result column="win_status" property="winStatus" />
+        <result column="release_status" property="releaseStatus" />
+        <result column="release_time" property="releaseTime" />
+        <result column="close_reason" property="closeReason" />
+        <result column="close_status" property="closeStatus" />
+        <result column="close_result" property="closeResult" />
+        <result column="close_time" property="closeTime" />
+        <result column="invoice_status" property="invoiceStatus" />
+        <result column="invoice_time" property="invoiceTime" />
+        <result column="invoice_doc_id" property="invoiceDocId" />
+        <result column="invoice_doc_url" property="invoiceDocUrl" />
+        <result column="compensate_status" property="compensateStatus" />
+        <result column="compensate_money" property="compensateMoney" />
+        <result column="compensate_contact_name" property="compensateContactName" />
+        <result column="compensate_contact_phone" property="compensateContactPhone" />
+        <result column="compensate_reason" property="compensateReason" />
+        <result column="compensate_acc_no" property="compensateAccNo" />
+        <result column="compensate_user_id" property="compensateUserId" />
+        <result column="compensate_user_name" property="compensateUserName" />
+        <result column="compensate_att_rela_id" property="compensateAttRelaId" />
+        <result column="compensate_time" property="compensateTime" />
+        <result column="create_time" property="createTime" />
+        <result column="create_user_id" property="createUserId" />
+        <result column="create_user_name" property="createUserName" />
+        <result column="update_time" property="updateTime" />
+        <result column="del_status" property="delStatus" />
+    </resultMap>
+
+</mapper>

@@ -1,0 +1,33 @@
+server:
+  port: 9296
+logging:
+  level:
+    web: info
+spring:
+  servlet:
+    multipart:
+      max-file-size: 1073741824
+      max-request-size: 1073741824
+  mvc:
+    pathmatch:
+      matching-strategy: ANT_PATH_MATCHER
+  main:
+    allow-circular-references: true
+  jackson:
+    time-zone: GMT+8
+    date-format: yyyy-MM-dd HH:mm:ss
+  application:
+    name: yzc-deposit
+
+knife4j:
+  enable: true
+management:
+  endpoints:
+    web:
+      base-path: /yzc-plt-management
+      exposure:
+        include: "health"
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl

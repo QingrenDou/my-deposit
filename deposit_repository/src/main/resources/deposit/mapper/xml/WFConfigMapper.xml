@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yzc.deposit.repository.mapper.deposit.WFConfigMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.yzc.common.deposit.entity.WFConfig">
+        <id column="wfConfigId" property="wfConfigId" />
+        <result column="companyId" property="companyId" />
+        <result column="wfType" property="wfType" />
+        <result column="startStatus" property="startStatus" />
+        <result column="updateUserId" property="updateUserId" />
+        <result column="updateUserName" property="updateUserName" />
+        <result column="updateTime" property="updateTime" />
+    </resultMap>
+
+</mapper>

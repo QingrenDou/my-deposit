@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.yzc</groupId>
+        <artifactId>yzc_deposit</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <groupId>com.yzc.deposit</groupId>
+    <artifactId>deposit_common</artifactId>
+
+    <properties>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+    <dependencies>
+        <dependency>
+            <groupId>com.yzc</groupId>
+            <artifactId>common-global</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.yzc</groupId>
+            <artifactId>common-api</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.yzc</groupId>
+            <artifactId>common-mybatis-plus</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-boot-starter</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-extension</artifactId>
+            <version>3.5.2</version>
+            <scope>compile</scope>
+        </dependency>
+
+        <!-- 交通银行-云直连SM方式对接 -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk15on</artifactId>
+            <version>1.61</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.8.6</version>
+        </dependency>
+
+    </dependencies>
+    <profiles>
+        <!-- 平台版本 -->
+        <profile>
+            <id>yzc</id>
+            <properties>
+                <profile.active>yzc</profile.active>
+            </properties>
+            <dependencies>
+                <dependency>
+                    <groupId>com.yzc</groupId>
+                    <artifactId>common-api-yzc-impl</artifactId>
+                    <version>1.0-SNAPSHOT</version>
+                </dependency>
+            </dependencies>
+        </profile>
+        <!-- 新华印刷部署版本 -->
+        <profile>
+            <id>xhys</id>
+            <properties>
+                <profile.active>xhys</profile.active>
+            </properties>
+            <dependencies>
+                <dependency>
+                    <groupId>com.yzc</groupId>
+                    <artifactId>common-api-xhys-impl</artifactId>
+                    <version>1.0-SNAPSHOT</version>
+                </dependency>
+            </dependencies>
+        </profile>
+        <!-- 淮北矿业部署版本 -->
+        <profile>
+            <id>hbky</id>
+            <properties>
+                <profile.active>hbky</profile.active>
+            </properties>
+            <dependencies>
+                <dependency>
+                    <groupId>com.yzc</groupId>
+                    <artifactId>common-api-hbky-impl</artifactId>
+                    <version>1.0-SNAPSHOT</version>
+                </dependency>
+            </dependencies>
+        </profile>
+        <!-- 北京控股集团部署版本 -->
+        <profile>
+            <id>bjkg</id>
+            <properties>
+                <profile.active>bjkg</profile.active>
+            </properties>
+            <dependencies>
+                <dependency>
+                    <groupId>com.yzc</groupId>
+                    <artifactId>common-api-bjkg-impl</artifactId>
+                    <version>1.0-SNAPSHOT</version>
+                </dependency>
+            </dependencies>
+        </profile>
+
+        <!-- 部署版本 -->
+        <profile>
+            <id>deploy</id>
+            <properties>
+                <profile.active>deploy</profile.active>
+            </properties>
+            <dependencies>
+                <dependency>
+                    <groupId>com.yzc</groupId>
+                    <artifactId>common-api-impl</artifactId>
+                    <version>1.0-SNAPSHOT</version>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
+</project>
