@@ -91,7 +91,7 @@ public class BankCWHbkyServiceImpl implements IBankAdapterService {
      * @return 刷新结果
      */
     @Override
-    public Result refreshRecordListToday(RefreshRecordListTodayReqDto reqDto, BankConfigRespDto bankConfigRespDto) {
+    public Result<List<InAccRecordSaveReqDto>> refreshRecordListToday(RefreshRecordListTodayReqDto reqDto, BankConfigRespDto bankConfigRespDto) {
         return Result.success();
     }
 

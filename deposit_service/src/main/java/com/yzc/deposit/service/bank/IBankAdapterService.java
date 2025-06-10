@@ -3,6 +3,7 @@ package com.yzc.deposit.service.bank;
 import com.yzc.common.api.Result;
 import com.yzc.common.deposit.dto.bank.common.*;
 import com.yzc.common.deposit.dto.deposit.BankConfigRespDto;
+import com.yzc.common.deposit.dto.deposit.InAccRecordSaveReqDto;
 
 import java.util.List;
 
@@ -46,7 +47,7 @@ public interface IBankAdapterService {
      * @param reqDto 刷新参数
      * @return 刷新结果
      */
-    Result refreshRecordListToday(RefreshRecordListTodayReqDto reqDto, BankConfigRespDto bankConfigRespDto);
+    Result<List<InAccRecordSaveReqDto>> refreshRecordListToday(RefreshRecordListTodayReqDto reqDto, BankConfigRespDto bankConfigRespDto);
 
     /**
      * 根据银行类型适配当前银行

@@ -9,6 +9,7 @@ import com.yzc.common.api.Result;
 import com.yzc.common.deposit.dto.bank.cmbCloudSm.*;
 import com.yzc.common.deposit.dto.bank.common.*;
 import com.yzc.common.deposit.dto.deposit.BankConfigRespDto;
+import com.yzc.common.deposit.dto.deposit.InAccRecordSaveReqDto;
 import com.yzc.common.deposit.entity.BankKey;
 import com.yzc.common.deposit.enums.BankMoldEnum;
 import com.yzc.common.deposit.enums.BankTypeCodeEnum;
@@ -250,7 +251,7 @@ public class BankCMBCloudSMServiceImpl implements IBankAdapterService {
      * @return 刷新结果
      */
     @Override
-    public Result refreshRecordListToday(RefreshRecordListTodayReqDto reqDto, BankConfigRespDto bankConfigRespDto) {
+    public Result<List<InAccRecordSaveReqDto>> refreshRecordListToday(RefreshRecordListTodayReqDto reqDto, BankConfigRespDto bankConfigRespDto) {
         String logStr = "CMBCloudSM[refreshRecordListToday]更新当日数据===>";
 
         //1.转为银行入参
@@ -258,6 +259,8 @@ public class BankCMBCloudSMServiceImpl implements IBankAdapterService {
         //2.调用银行接口
 
         //3.解析返回结果
+
+        //4.将结果转换为数据库InAccRecordSaveReqDto对象集合
 
         return Result.success();
     }
@@ -336,7 +339,7 @@ public class BankCMBCloudSMServiceImpl implements IBankAdapterService {
      * @param bankConfigRespDto 银行配置
      * @return 刷新结果
      */
-    public Result refreshRecordListHis(RefreshRecordListHisReqDto reqDto, BankConfigRespDto bankConfigRespDto) {
+    public Result<List<InAccRecordSaveReqDto>> refreshRecordListHis(RefreshRecordListHisReqDto reqDto, BankConfigRespDto bankConfigRespDto) {
         String logStr = "CMBCloudSM[refreshRecordListHis]更新历史数据===>";
 
         //1.转为银行入参
@@ -344,6 +347,8 @@ public class BankCMBCloudSMServiceImpl implements IBankAdapterService {
         //2.调用银行接口
 
         //3.解析返回结果
+
+        //4.将结果转换为数据库InAccRecordSaveReqDto对象集合
 
         return Result.success();
     }

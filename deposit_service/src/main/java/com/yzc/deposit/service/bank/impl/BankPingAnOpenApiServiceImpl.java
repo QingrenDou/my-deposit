@@ -4,6 +4,7 @@ import cn.hutool.core.util.ObjectUtil;
 import com.yzc.common.api.Result;
 import com.yzc.common.deposit.dto.bank.common.*;
 import com.yzc.common.deposit.dto.deposit.BankConfigRespDto;
+import com.yzc.common.deposit.dto.deposit.InAccRecordSaveReqDto;
 import com.yzc.common.deposit.enums.BankMoldEnum;
 import com.yzc.deposit.service.bank.IBankAdapterService;
 import lombok.extern.slf4j.Slf4j;
@@ -72,7 +73,7 @@ public class BankPingAnOpenApiServiceImpl implements IBankAdapterService {
      * @return 刷新结果
      */
     @Override
-    public Result refreshRecordListToday(RefreshRecordListTodayReqDto reqDto, BankConfigRespDto bankConfigRespDto) {
+    public Result<List<InAccRecordSaveReqDto>> refreshRecordListToday(RefreshRecordListTodayReqDto reqDto, BankConfigRespDto bankConfigRespDto) {
         return Result.success();
     }
 
