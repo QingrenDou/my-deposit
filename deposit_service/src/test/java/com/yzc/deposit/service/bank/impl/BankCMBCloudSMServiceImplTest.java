@@ -1,38 +1,45 @@
 package com.yzc.deposit.service.bank.impl;
 
+import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.ObjectUtil;
 import com.alibaba.fastjson.TypeReference;
 import com.yzc.common.api.Result;
 import com.yzc.common.deposit.dto.bank.cmbCloudSm.*;
-import com.yzc.common.deposit.dto.bank.common.ApplyBackMoneyReqDto;
-import com.yzc.common.deposit.dto.bank.common.ApplyBackMoneyRespDto;
+import com.yzc.common.deposit.dto.bank.common.RefreshRecordListHisReqDto;
+import com.yzc.common.deposit.dto.bank.common.RefreshRecordListTodayReqDto;
 import com.yzc.common.deposit.dto.deposit.BankConfigRespDto;
+import com.yzc.common.deposit.dto.deposit.InAccRecordSaveReqDto;
 import com.yzc.common.deposit.entity.BankKey;
 import com.yzc.common.deposit.enums.BankTypeCodeEnum;
-import com.yzc.common.deposit.util.DepositUtil;
 import com.yzc.deposit.dao.deposit.IBankKeyDao;
+import org.apache.commons.lang3.StringUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.*;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.env.Environment;
 
 import java.math.BigDecimal;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 public class BankCMBCloudSMServiceImplTest {
 
     @InjectMocks
-    @Spy
+    @Spy // Using Spy to allow mocking of postToBank.
     private BankCMBCloudSMServiceImpl bankCMBCloudSMService;
 
     @Mock
@@ -42,294 +49,313 @@ public class BankCMBCloudSMServiceImplTest {
     private Environment env;
 
     private BankConfigRespDto bankConfigRespDto;
-    private ApplyBackMoneyReqDto applyBackMoneyReqDto;
-    private BankKey bankKey;
+    private SimpleDateFormat bankDateFormat = new SimpleDateFormat("yyyyMMdd");
+    private SimpleDateFormat dateTimeFormat = new SimpleDateFormat("yyyyMMddHHmmss");
 
-    private static final String SUCCESS_CODE = "SUC0000";
-    private static final String ERROR_CODE = "ERR0001";
-    private static final String BUSMOD_VALUE = "S2008";
-    private static final String MAIN_ACCOUNT = "1234567890";
-    private static final String SUB_ACC = "000001";
-    private static final String REQ_NO = "REQ2023102600001";
-    private static final String ORIG_TRANS_NO = "ORIG001";
 
     @BeforeEach
     void setUp() {
         bankConfigRespDto = new BankConfigRespDto();
+        bankConfigRespDto.setMainAccount("1234567890");
         bankConfigRespDto.setBankTypeCode(BankTypeCodeEnum.CMBBank_NMJTSJY.getCode());
-        bankConfigRespDto.setBankHttpUrl("http://testurl.com");
-        bankConfigRespDto.setConsumerId("testConsumerId");
-        bankConfigRespDto.setMainAccount(MAIN_ACCOUNT);
+        bankConfigRespDto.setConsumerId("testUser");
+        bankConfigRespDto.setBankHttpUrl("http://testbankapi.com");
 
-        applyBackMoneyReqDto = new ApplyBackMoneyReqDto();
-        applyBackMoneyReqDto.setReqNo(REQ_NO);
-        applyBackMoneyReqDto.setOrigTransNo(ORIG_TRANS_NO);
-        applyBackMoneyReqDto.setAmount(new BigDecimal("100.50"));
-        applyBackMoneyReqDto.setSubAcc(SUB_ACC);
-        applyBackMoneyReqDto.setReqDate(new Date());
-        applyBackMoneyReqDto.setReceiveAccNo("6220000000000000");
-        applyBackMoneyReqDto.setReceiveAccName("张三");
-        applyBackMoneyReqDto.setIsRefundInterest(true);
-        applyBackMoneyReqDto.setInterestAmount(new BigDecimal("0.50"));
-        applyBackMoneyReqDto.setPurpose("测试退款");
-        applyBackMoneyReqDto.setSummary("退款摘要");
-
-        bankKey = new BankKey();
+        BankKey bankKey = new BankKey();
         bankKey.setYzcPrivateKey("testPrivateKey");
         bankKey.setBankPublicKey("testBankPublicKey");
-        bankKey.setCipher("SM2"); // Assuming SM2 is used
-
-        // Mock common behavior
-        when(env.getProperty("bank.nmjt.busmod")).thenReturn(BUSMOD_VALUE);
+        bankKey.setCipher("SM2");
+        when(bankKeyDao.getByBankTypeCode(any())).thenReturn(bankKey);
+        when(env.getProperty("bank.nmjt.busmod")).thenReturn("S2008");
     }
 
-    private CMBCloudBaseRespDto<CMBCloudNTOPRDMRRespBodyDto> createMockSuccessResponse() {
-        CMBCloudBaseRespDto<CMBCloudNTOPRDMRRespBodyDto> baseResp = new CMBCloudBaseRespDto<>();
-        CMBCloudCommonResponseDto<CMBCloudNTOPRDMRRespBodyDto> commonResp = new CMBCloudCommonResponseDto<>();
-        CMBCloudCommonRespHeadDto head = new CMBCloudCommonRespHeadDto();
-        head.setResultcode(SUCCESS_CODE);
-        head.setResultmsg("Success");
-        commonResp.setHead(head);
+    // --- Helper Methods to create Mock Bank Responses ---
 
-        CMBCloudNTOPRDMRRespBodyDto body = new CMBCloudNTOPRDMRRespBodyDto();
-        CMBCloudNTOPRDMRRespNtoprrtnzDto item = new CMBCloudNTOPRDMRRespNtoprrtnzDto();
-        item.setReqnbr(REQ_NO);
-        item.setReqsts("FIN"); // Finished
-        item.setErrcod(SUCCESS_CODE);
-        item.setErrtxt("交易成功");
-        body.setNtoprrtnz(List.of(item));
-        commonResp.setBody(body);
-        baseResp.setResponse(commonResp);
+    private CMBCloudBaseRespDto<CMBCloudQueryRecordTodayRespBodyDto> createMockTodayResponse(
+            List<CMBCloudQueryRecordTodayItemDto> items, String ctnKeyResponse, String errorCode, String errorMsg, boolean headError) {
+
+        CMBCloudBaseRespDto<CMBCloudQueryRecordTodayRespBodyDto> baseResp = new CMBCloudBaseRespDto<>();
+        CMBCloudCommonRespDto<CMBCloudQueryRecordTodayRespBodyDto> response = new CMBCloudCommonRespDto<>();
+        CMBCloudCommonRespHeadDto head = new CMBCloudCommonRespHeadDto();
+        CMBCloudQueryRecordTodayRespBodyDto body = new CMBCloudQueryRecordTodayRespBodyDto();
+
+        if (headError) {
+            head.setResultcode("FAIL001");
+            head.setResultmsg("Head Error Message");
+        } else {
+            head.setResultcode("SUC0000");
+            head.setResultmsg("Success");
+        }
+        response.setHead(head);
+
+        if (!headError) {
+            CMBCloudQueryRecordTodayRespNtdmtlstyDto ntdmtlstyResp = new CMBCloudQueryRecordTodayRespNtdmtlstyDto();
+            ntdmtlstyResp.setCtnkey(ctnKeyResponse);
+            body.setNtdmtlsty(List.of(ntdmtlstyResp));
+
+            if (StringUtils.isNotBlank(errorCode)) {
+                CMBCloudQueryRecordTodayRespNtdmtlstz1Dto errorNode = new CMBCloudQueryRecordTodayRespNtdmtlstz1Dto();
+                errorNode.setErrcod(errorCode);
+                errorNode.setErrtxt(errorMsg);
+                body.setNtdmtlstz1(List.of(errorNode));
+                body.setNtdmtlstz(new ArrayList<>());
+            } else {
+                body.setNtdmtlstz(items != null ? items : new ArrayList<>());
+                body.setNtdmtlstz2(new ArrayList<>());
+            }
+        }
+        response.setBody(body);
+        baseResp.setResponse(response);
         return baseResp;
     }
 
-    private CMBCloudBaseRespDto<CMBCloudNTOPRDMRRespBodyDto> createMockBusinessErrorResponse() {
-        CMBCloudBaseRespDto<CMBCloudNTOPRDMRRespBodyDto> baseResp = new CMBCloudBaseRespDto<>();
-        CMBCloudCommonResponseDto<CMBCloudNTOPRDMRRespBodyDto> commonResp = new CMBCloudCommonResponseDto<>();
+    private CMBCloudBaseRespDto<CMBCloudQueryRecordHisRespBodyDto> createMockHisResponse(
+            List<CMBCloudQueryRecordHisItemDto> items, String ctnKeyResponse, boolean headError, String headErrorCode, String headErrorMsg) {
+        CMBCloudBaseRespDto<CMBCloudQueryRecordHisRespBodyDto> baseResp = new CMBCloudBaseRespDto<>();
+        CMBCloudCommonRespDto<CMBCloudQueryRecordHisRespBodyDto> response = new CMBCloudCommonRespDto<>();
         CMBCloudCommonRespHeadDto head = new CMBCloudCommonRespHeadDto();
-        head.setResultcode(SUCCESS_CODE); // Head is success
-        head.setResultmsg("Success");
-        commonResp.setHead(head);
+        CMBCloudQueryRecordHisRespBodyDto body = new CMBCloudQueryRecordHisRespBodyDto();
 
-        CMBCloudNTOPRDMRRespBodyDto body = new CMBCloudNTOPRDMRRespBodyDto();
-        CMBCloudNTOPRDMRRespNtoprrtnzDto item = new CMBCloudNTOPRDMRRespNtoprrtnzDto();
-        item.setReqnbr(REQ_NO);
-        item.setReqsts("ERR");
-        item.setErrcod(ERROR_CODE);
-        item.setErrtxt("余额不足");
-        body.setNtoprrtnz(List.of(item));
-        commonResp.setBody(body);
-        baseResp.setResponse(commonResp);
+        if (headError) {
+            head.setResultcode(headErrorCode != null ? headErrorCode : "FAIL001");
+            head.setResultmsg(headErrorMsg != null ? headErrorMsg : "Head Error Message");
+        } else {
+            head.setResultcode("SUC0000");
+            head.setResultmsg("Success");
+        }
+        response.setHead(head);
+
+        if (!headError) {
+            CMBCloudQueryRecordHisRespNtdmthlsyDto ntdmthlsyResp = new CMBCloudQueryRecordHisRespNtdmthlsyDto();
+            ntdmthlsyResp.setCtnkey(ctnKeyResponse);
+            body.setNtdmthlsy(List.of(ntdmthlsyResp));
+            body.setNtdmthlsz(items != null ? items : new ArrayList<>());
+            body.setNtdmthlsz2(new ArrayList<>());
+        }
+        response.setBody(body);
+        baseResp.setResponse(response);
         return baseResp;
     }
 
-    private CMBCloudBaseRespDto<CMBCloudNTOPRDMRRespBodyDto> createMockSystemErrorResponse() {
-        CMBCloudBaseRespDto<CMBCloudNTOPRDMRRespBodyDto> baseResp = new CMBCloudBaseRespDto<>();
-        CMBCloudCommonResponseDto<CMBCloudNTOPRDMRRespBodyDto> commonResp = new CMBCloudCommonResponseDto<>();
-        CMBCloudCommonRespHeadDto head = new CMBCloudCommonRespHeadDto();
-        head.setResultcode(ERROR_CODE); // Head is error
-        head.setResultmsg("系统错误");
-        commonResp.setHead(head);
-        // Body might be null or empty in this case
-        baseResp.setResponse(commonResp);
-        return baseResp;
-    }
 
+    // --- Tests for refreshRecordListToday ---
 
     @Test
-    void testApplyBackMoney_Success() {
-        // Arrange
-        when(bankKeyDao.getByBankTypeCode(bankConfigRespDto.getBankTypeCode())).thenReturn(bankKey);
-        CMBCloudBaseRespDto<CMBCloudNTOPRDMRRespBodyDto> mockResponse = createMockSuccessResponse();
-        doReturn(mockResponse).when(bankCMBCloudSMService).postToBank(
-                any(CMBCloudNTOPRDMRReqBodyDto.class),
-                eq("NTOPRDMR"),
-                any(BankConfigRespDto.class),
-                anyString(),
-                any(TypeReference.class)
-        );
+    void testRefreshRecordListToday_Success_SinglePage() throws Exception {
+        RefreshRecordListTodayReqDto reqDto = new RefreshRecordListTodayReqDto();
+        reqDto.setTenantId(1L);
 
-        // Act
-        Result<ApplyBackMoneyRespDto> result = bankCMBCloudSMService.applyBackMoney(applyBackMoneyReqDto, bankConfigRespDto);
+        List<CMBCloudQueryRecordTodayItemDto> items = new ArrayList<>();
+        CMBCloudQueryRecordTodayItemDto item1 = new CMBCloudQueryRecordTodayItemDto();
+        item1.setTrxnbr("TRX001");
+        item1.setTrxdat("20230101");
+        item1.setTrxtim("100000");
+        item1.setTrsam(new BigDecimal("100.50"));
+        item1.setDcflag("C");
+        item1.setCltacc("payerAcc1");
+        item1.setCltnam("Payer Name 1");
+        item1.setEtyacc(bankConfigRespDto.getMainAccount());
+        item1.setEtynam("Payee Name 1");
+        item1.setNaryur("Summary 1");
+        item1.setDmanbr("subAcc1");
+        item1.setRtnsts("S");
+        item1.setCcynbr("CNY");
+        items.add(item1);
 
-        // Assert
-        assertNotNull(result);
+        CMBCloudBaseRespDto<CMBCloudQueryRecordTodayRespBodyDto> mockResponse =
+            createMockTodayResponse(items, "", null, null, false);
+
+        // The service instance is a @Spy, so we can mock specific methods.
+        // postToBank is private, for Mockito @Spy to work on private methods, it usually requires PowerMock or making the method accessible (e.g. package-private/protected).
+        // Assuming the method was made testable (e.g. changed to protected for test purposes)
+        doReturn(mockResponse).when(bankCMBCloudSMService).postToBank(any(CMBCloudQueryRecordTodayReqBodyDto.class), eq("NTDMTLST"), any(BankConfigRespDto.class), any(String.class), any(TypeReference.class));
+
+        Result<List<InAccRecordSaveReqDto>> result = bankCMBCloudSMService.refreshRecordListToday(reqDto, bankConfigRespDto);
+
         assertTrue(result.isSuccess());
         assertNotNull(result.getData());
-        ApplyBackMoneyRespDto respDto = result.getData();
-        assertEquals(REQ_NO, respDto.getBankReqNo());
-        assertEquals("FIN", respDto.getBankStatus());
-        assertEquals(SUCCESS_CODE, respDto.getBankCode());
-        assertEquals("交易成功", respDto.getBankMessage());
-        assertTrue(respDto.isSuccess());
-
-        ArgumentCaptor<CMBCloudNTOPRDMRReqBodyDto> captor = ArgumentCaptor.forClass(CMBCloudNTOPRDMRReqBodyDto.class);
-        verify(bankCMBCloudSMService).postToBank(captor.capture(), eq("NTOPRDMR"), eq(bankConfigRespDto), anyString(), any(TypeReference.class));
-        CMBCloudNTOPRDMRReqBodyDto capturedBody = captor.getValue();
-        assertNotNull(capturedBody.getNtbusmody());
-        assertEquals(1, capturedBody.getNtbusmody().size());
-        assertEquals(BUSMOD_VALUE, capturedBody.getNtbusmody().get(0).getBusmod());
-
-        assertNotNull(capturedBody.getNtoprdmrx1());
-        assertEquals(1, capturedBody.getNtoprdmrx1().size());
-        CMBCloudNTOPRDMRReqNtoprdmrx1Dto r1 = capturedBody.getNtoprdmrx1().get(0);
-        assertEquals(applyBackMoneyReqDto.getOrigTransNo(), r1.getTrxnbr());
-        assertEquals(0, applyBackMoneyReqDto.getAmount().compareTo(r1.getTrsamt()));
-        assertEquals(bankConfigRespDto.getMainAccount(), r1.getAccnbr());
-        assertEquals(applyBackMoneyReqDto.getSubAcc(), r1.getDumnbr());
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
-        assertEquals(sdf.format(applyBackMoneyReqDto.getReqDate()), r1.getEptdat());
-        assertEquals(applyBackMoneyReqDto.getReceiveAccNo(), r1.getRpyacc());
-        assertEquals(applyBackMoneyReqDto.getReceiveAccName(), r1.getRpynam());
-        assertEquals("Y", r1.getIntflg());
-        assertEquals(0, applyBackMoneyReqDto.getInterestAmount().compareTo(r1.getIntamt()));
-        assertEquals(applyBackMoneyReqDto.getReqNo(), r1.getYurref());
-        assertEquals(applyBackMoneyReqDto.getPurpose(), r1.getNusage());
-        assertEquals(applyBackMoneyReqDto.getSummary(), r1.getBusnar());
-        assertEquals("N", r1.getBckflg());
-        assertEquals("N", r1.getApvflg());
-        assertEquals("N", r1.getApdflg()); // Default as no address details provided in this basic setup
-        assertNull(capturedBody.getNtoprdmrx2()); // No address details
+        assertEquals(1, result.getData().size());
+        InAccRecordSaveReqDto savedRecord = result.getData().get(0);
+        assertEquals("TRX001", savedRecord.getBankTransNo());
+        assertEquals(0, new BigDecimal("100.50").compareTo(savedRecord.getTransAmount()));
+        assertEquals(1, savedRecord.getTransType());
+        assertEquals("subAcc1", savedRecord.getSubAcc());
+        assertEquals(dateTimeFormat.parse("20230101100000"), savedRecord.getTransDate());
     }
 
     @Test
-    void testApplyBackMoney_BusinessError() {
-        // Arrange
-        when(bankKeyDao.getByBankTypeCode(bankConfigRespDto.getBankTypeCode())).thenReturn(bankKey);
-        CMBCloudBaseRespDto<CMBCloudNTOPRDMRRespBodyDto> mockResponse = createMockBusinessErrorResponse();
-        doReturn(mockResponse).when(bankCMBCloudSMService).postToBank(any(), anyString(), any(), anyString(), any());
+    void testRefreshRecordListToday_Success_MultiPage() throws Exception {
+        RefreshRecordListTodayReqDto reqDto = new RefreshRecordListTodayReqDto();
+        reqDto.setTenantId(1L);
 
-        // Act
-        Result<ApplyBackMoneyRespDto> result = bankCMBCloudSMService.applyBackMoney(applyBackMoneyReqDto, bankConfigRespDto);
+        List<CMBCloudQueryRecordTodayItemDto> itemsPage1 = new ArrayList<>();
+        CMBCloudQueryRecordTodayItemDto item1 = new CMBCloudQueryRecordTodayItemDto();
+        item1.setTrxnbr("TRX001"); item1.setTrxdat("20230101"); item1.setTrxtim("100000"); item1.setTrsam(new BigDecimal("100.00")); item1.setDcflag("C");
+        itemsPage1.add(item1);
+        CMBCloudBaseRespDto<CMBCloudQueryRecordTodayRespBodyDto> responsePage1 = createMockTodayResponse(itemsPage1, "NEXTKEY123", null, null, false);
 
-        // Assert
-        assertNotNull(result);
-        assertTrue(result.isSuccess()); // The method itself returns success, but the DTO inside indicates bank error
+        List<CMBCloudQueryRecordTodayItemDto> itemsPage2 = new ArrayList<>();
+        CMBCloudQueryRecordTodayItemDto item2 = new CMBCloudQueryRecordTodayItemDto();
+        item2.setTrxnbr("TRX002"); item2.setTrxdat("20230101"); item2.setTrxtim("110000"); item2.setTrsam(new BigDecimal("200.00")); item2.setDcflag("D");
+        itemsPage2.add(item2);
+        CMBCloudBaseRespDto<CMBCloudQueryRecordTodayRespBodyDto> responsePage2 = createMockTodayResponse(itemsPage2, "", null, null, false);
+
+        doReturn(responsePage1)
+            .doReturn(responsePage2)
+            .when(bankCMBCloudSMService).postToBank(any(CMBCloudQueryRecordTodayReqBodyDto.class), eq("NTDMTLST"), any(BankConfigRespDto.class), any(String.class), any(TypeReference.class));
+
+        Result<List<InAccRecordSaveReqDto>> result = bankCMBCloudSMService.refreshRecordListToday(reqDto, bankConfigRespDto);
+
+        assertTrue(result.isSuccess());
         assertNotNull(result.getData());
-        ApplyBackMoneyRespDto respDto = result.getData();
-        assertEquals(REQ_NO, respDto.getBankReqNo());
-        assertEquals("ERR", respDto.getBankStatus());
-        assertEquals(ERROR_CODE, respDto.getBankCode());
-        assertEquals("余额不足", respDto.getBankMessage());
-        assertFalse(respDto.isSuccess());
+        assertEquals(2, result.getData().size());
+        assertEquals("TRX001", result.getData().get(0).getBankTransNo());
+        assertEquals("TRX002", result.getData().get(1).getBankTransNo());
     }
 
     @Test
-    void testApplyBackMoney_SystemError_HeadError() {
-        // Arrange
-        when(bankKeyDao.getByBankTypeCode(bankConfigRespDto.getBankTypeCode())).thenReturn(bankKey);
-        CMBCloudBaseRespDto<CMBCloudNTOPRDMRRespBodyDto> mockResponse = createMockSystemErrorResponse();
-        doReturn(mockResponse).when(bankCMBCloudSMService).postToBank(any(), anyString(), any(), anyString(), any());
+    void testRefreshRecordListToday_Error_BankHeadError() {
+        RefreshRecordListTodayReqDto reqDto = new RefreshRecordListTodayReqDto();
+        CMBCloudBaseRespDto<CMBCloudQueryRecordTodayRespBodyDto> mockResponse =
+            createMockTodayResponse(null, null, null, null, true);
 
-        // Act
-        Result<ApplyBackMoneyRespDto> result = bankCMBCloudSMService.applyBackMoney(applyBackMoneyReqDto, bankConfigRespDto);
+        doReturn(mockResponse).when(bankCMBCloudSMService).postToBank(any(CMBCloudQueryRecordTodayReqBodyDto.class), eq("NTDMTLST"), any(BankConfigRespDto.class), any(String.class), any(TypeReference.class));
 
-        // Assert
-        assertNotNull(result);
+        Result<List<InAccRecordSaveReqDto>> result = bankCMBCloudSMService.refreshRecordListToday(reqDto, bankConfigRespDto);
+
         assertFalse(result.isSuccess());
-        assertNull(result.getData());
-        assertTrue(result.getMsg().contains("系统错误"));
+        assertTrue(result.getMessage().contains("Head Error Message"));
     }
 
     @Test
-    void testApplyBackMoney_NullResponseFromBank() {
-        // Arrange
-        when(bankKeyDao.getByBankTypeCode(bankConfigRespDto.getBankTypeCode())).thenReturn(bankKey);
-        doReturn(null).when(bankCMBCloudSMService).postToBank(any(), anyString(), any(), anyString(), any());
+    void testRefreshRecordListToday_Error_BankBodyError() {
+        RefreshRecordListTodayReqDto reqDto = new RefreshRecordListTodayReqDto();
+        CMBCloudBaseRespDto<CMBCloudQueryRecordTodayRespBodyDto> mockResponse =
+            createMockTodayResponse(null, null, "ERRBODY01", "Body Error Detail", false);
 
-        // Act
-        Result<ApplyBackMoneyRespDto> result = bankCMBCloudSMService.applyBackMoney(applyBackMoneyReqDto, bankConfigRespDto);
+        doReturn(mockResponse).when(bankCMBCloudSMService).postToBank(any(CMBCloudQueryRecordTodayReqBodyDto.class), eq("NTDMTLST"), any(BankConfigRespDto.class), any(String.class), any(TypeReference.class));
 
-        // Assert
-        assertNotNull(result);
+        Result<List<InAccRecordSaveReqDto>> result = bankCMBCloudSMService.refreshRecordListToday(reqDto, bankConfigRespDto);
+
         assertFalse(result.isSuccess());
-        assertNull(result.getData());
-        assertEquals("申请退款失败[银行返回为空或结构错误]", result.getMsg());
+        assertTrue(result.getMessage().contains("Body Error Detail"));
     }
 
     @Test
-    void testApplyBackMoney_WithNtoprdmrx2() {
-        // Arrange
-        applyBackMoneyReqDto.setReceiveAccBankAddr("Test Address");
-        applyBackMoneyReqDto.setReceiveAccBankName("Test Bank Name");
-        applyBackMoneyReqDto.setReceiveAccBankNo("Test Bank No");
+    void testRefreshRecordListToday_EmptyResponse() {
+        RefreshRecordListTodayReqDto reqDto = new RefreshRecordListTodayReqDto();
+        CMBCloudBaseRespDto<CMBCloudQueryRecordTodayRespBodyDto> mockResponse =
+            createMockTodayResponse(new ArrayList<>(), "", null, null, false);
 
-        when(bankKeyDao.getByBankTypeCode(bankConfigRespDto.getBankTypeCode())).thenReturn(bankKey);
-        CMBCloudBaseRespDto<CMBCloudNTOPRDMRRespBodyDto> mockResponse = createMockSuccessResponse();
-        doReturn(mockResponse).when(bankCMBCloudSMService).postToBank(any(), anyString(), any(), anyString(), any());
+        doReturn(mockResponse).when(bankCMBCloudSMService).postToBank(any(CMBCloudQueryRecordTodayReqBodyDto.class), eq("NTDMTLST"), any(BankConfigRespDto.class), any(String.class), any(TypeReference.class));
 
-        // Act
-        Result<ApplyBackMoneyRespDto> result = bankCMBCloudSMService.applyBackMoney(applyBackMoneyReqDto, bankConfigRespDto);
+        Result<List<InAccRecordSaveReqDto>> result = bankCMBCloudSMService.refreshRecordListToday(reqDto, bankConfigRespDto);
 
-        // Assert
         assertTrue(result.isSuccess());
-        ArgumentCaptor<CMBCloudNTOPRDMRReqBodyDto> captor = ArgumentCaptor.forClass(CMBCloudNTOPRDMRReqBodyDto.class);
-        verify(bankCMBCloudSMService).postToBank(captor.capture(), eq("NTOPRDMR"), eq(bankConfigRespDto), anyString(), any(TypeReference.class));
-        CMBCloudNTOPRDMRReqBodyDto capturedBody = captor.getValue();
+        assertNotNull(result.getData());
+        assertTrue(result.getData().isEmpty());
+    }
 
-        assertNotNull(capturedBody.getNtoprdmrx1());
-        assertEquals(1, capturedBody.getNtoprdmrx1().size());
-        CMBCloudNTOPRDMRReqNtoprdmrx1Dto r1 = capturedBody.getNtoprdmrx1().get(0);
-        assertEquals("Y", r1.getApdflg(), "apdflg should be 'Y' when ntoprdmrx2 is populated");
+    // --- Tests for refreshRecordListHis ---
 
-        assertNotNull(capturedBody.getNtoprdmrx2());
-        assertEquals(1, capturedBody.getNtoprdmrx2().size());
-        CMBCloudNTOPRDMRReqNtoprdmrx2Dto r2 = capturedBody.getNtoprdmrx2().get(0);
-        assertEquals("Test Address", r2.getRpyadr());
-        assertEquals("Test Bank Name", r2.getRpybkn());
-        assertEquals("Test Bank No", r2.getRpybbn());
+    @Test
+    void testRefreshRecordListHis_Success_SinglePage() throws Exception {
+        RefreshRecordListHisReqDto reqDto = new RefreshRecordListHisReqDto();
+        reqDto.setTenantId(1L);
+        reqDto.setStartDate(bankDateFormat.parse("20230101"));
+        reqDto.setEndDate(bankDateFormat.parse("20230101"));
+
+        List<CMBCloudQueryRecordHisItemDto> items = new ArrayList<>();
+        CMBCloudQueryRecordHisItemDto item1 = new CMBCloudQueryRecordHisItemDto();
+        item1.setTrxnbr("TRXH001");
+        item1.setTrxdat("20230101");
+        item1.setTrxtim("093000");
+        item1.setTrsam(new BigDecimal("500.75"));
+        item1.setDcflag("D");
+        item1.setNaryur("Historic Summary 1");
+        items.add(item1);
+
+        CMBCloudBaseRespDto<CMBCloudQueryRecordHisRespBodyDto> mockResponse =
+            createMockHisResponse(items, "", false, null, null);
+
+        doReturn(mockResponse).when(bankCMBCloudSMService).postToBank(any(CMBCloudQueryRecordHisReqBodyDto.class), eq("NTDMTHLS"), any(BankConfigRespDto.class), any(String.class), any(TypeReference.class));
+
+        Result<List<InAccRecordSaveReqDto>> result = bankCMBCloudSMService.refreshRecordListHis(reqDto, bankConfigRespDto);
+
+        assertTrue(result.isSuccess());
+        assertNotNull(result.getData());
+        assertEquals(1, result.getData().size());
+        InAccRecordSaveReqDto savedRecord = result.getData().get(0);
+        assertEquals("TRXH001", savedRecord.getBankTransNo());
+        assertEquals(0, new BigDecimal("500.75").compareTo(savedRecord.getTransAmount()));
+        assertEquals(2, savedRecord.getTransType());
+        assertEquals(dateTimeFormat.parse("20230101093000"), savedRecord.getTransDate());
     }
 
     @Test
-    void testApplyBackMoney_YurrefGeneration() {
-        // Arrange
-        applyBackMoneyReqDto.setReqNo(null); // Ensure reqNo is null to test generation
-        String generatedSeqNo = "GeneratedSeqNo123";
+    void testRefreshRecordListHis_Success_MultiPage() throws Exception {
+        RefreshRecordListHisReqDto reqDto = new RefreshRecordListHisReqDto();
+        reqDto.setTenantId(1L);
+        reqDto.setStartDate(bankDateFormat.parse("20230101"));
+        reqDto.setEndDate(bankDateFormat.parse("20230102"));
 
-        when(bankKeyDao.getByBankTypeCode(bankConfigRespDto.getBankTypeCode())).thenReturn(bankKey);
-        CMBCloudBaseRespDto<CMBCloudNTOPRDMRRespBodyDto> mockResponse = createMockSuccessResponse();
-        doReturn(mockResponse).when(bankCMBCloudSMService).postToBank(any(), anyString(), any(), anyString(), any());
+        List<CMBCloudQueryRecordHisItemDto> itemsPage1 = new ArrayList<>();
+        CMBCloudQueryRecordHisItemDto item1 = new CMBCloudQueryRecordHisItemDto();
+        item1.setTrxnbr("TRXH001"); item1.setTrxdat("20230101"); item1.setTrsam(new BigDecimal("10.00"));
+        itemsPage1.add(item1);
+        CMBCloudBaseRespDto<CMBCloudQueryRecordHisRespBodyDto> responsePage1 = createMockHisResponse(itemsPage1, "NEXTHISKEY", false, null, null);
 
-        // Mock static method DepositUtil.getSeqNo()
-        // This requires PowerMockito or changing DepositUtil to be injectable, or refactoring the service method.
-        // For simplicity here, we assume DepositUtil.getSeqNo() would work if we could mock it.
-        // If direct static mocking is not set up, this part of the test will use the real DepositUtil.getSeqNo().
-        // To properly test this in isolation, further test setup (like PowerMock) or code refactoring is needed.
-        // For now, we'll capture and check if yurref is populated.
+        List<CMBCloudQueryRecordHisItemDto> itemsPage2 = new ArrayList<>();
+        CMBCloudQueryRecordHisItemDto item2 = new CMBCloudQueryRecordHisItemDto();
+        item2.setTrxnbr("TRXH002"); item2.setTrxdat("20230102"); item2.setTrsam(new BigDecimal("20.00"));
+        itemsPage2.add(item2);
+        CMBCloudBaseRespDto<CMBCloudQueryRecordHisRespBodyDto> responsePage2 = createMockHisResponse(itemsPage2, "", false, null, null);
 
-        // Act
-        Result<ApplyBackMoneyRespDto> result = bankCMBCloudSMService.applyBackMoney(applyBackMoneyReqDto, bankConfigRespDto);
+        doReturn(responsePage1)
+            .doReturn(responsePage2)
+            .when(bankCMBCloudSMService).postToBank(any(CMBCloudQueryRecordHisReqBodyDto.class), eq("NTDMTHLS"), any(BankConfigRespDto.class), any(String.class), any(TypeReference.class));
 
-        // Assert
+        Result<List<InAccRecordSaveReqDto>> result = bankCMBCloudSMService.refreshRecordListHis(reqDto, bankConfigRespDto);
+
         assertTrue(result.isSuccess());
-        ArgumentCaptor<CMBCloudNTOPRDMRReqBodyDto> captor = ArgumentCaptor.forClass(CMBCloudNTOPRDMRReqBodyDto.class);
-        verify(bankCMBCloudSMService).postToBank(captor.capture(), eq("NTOPRDMR"), any(), anyString(), any());
-        CMBCloudNTOPRDMRReqBodyDto capturedBody = captor.getValue();
-        CMBCloudNTOPRDMRReqNtoprdmrx1Dto r1 = capturedBody.getNtoprdmrx1().get(0);
-        assertNotNull(r1.getYurref());
-        assertFalse(r1.getYurref().isEmpty());
-        // If we could mock DepositUtil.getSeqNo to return `generatedSeqNo`
-        // assertEquals(generatedSeqNo, r1.getYurref());
+        assertNotNull(result.getData());
+        assertEquals(2, result.getData().size());
+        assertEquals("TRXH001", result.getData().get(0).getBankTransNo());
+        assertEquals("TRXH002", result.getData().get(1).getBankTransNo());
     }
 
     @Test
-    void testApplyBackMoney_NusageDefault() {
-        // Arrange
-        applyBackMoneyReqDto.setPurpose(null); // Ensure purpose is null
+    void testRefreshRecordListHis_Error_BankHeadError() throws ParseException {
+        RefreshRecordListHisReqDto reqDto = new RefreshRecordListHisReqDto();
+        reqDto.setStartDate(bankDateFormat.parse("20230101"));
+        reqDto.setEndDate(bankDateFormat.parse("20230101"));
 
-        when(bankKeyDao.getByBankTypeCode(bankConfigRespDto.getBankTypeCode())).thenReturn(bankKey);
-        CMBCloudBaseRespDto<CMBCloudNTOPRDMRRespBodyDto> mockResponse = createMockSuccessResponse();
-        doReturn(mockResponse).when(bankCMBCloudSMService).postToBank(any(), anyString(), any(), anyString(), any());
+        CMBCloudBaseRespDto<CMBCloudQueryRecordHisRespBodyDto> mockResponse =
+            createMockHisResponse(null, "", true, "HISFAIL01", "Historic Head Error");
 
-        // Act
-        Result<ApplyBackMoneyRespDto> result = bankCMBCloudSMService.applyBackMoney(applyBackMoneyReqDto, bankConfigRespDto);
+        doReturn(mockResponse).when(bankCMBCloudSMService).postToBank(any(CMBCloudQueryRecordHisReqBodyDto.class), eq("NTDMTHLS"), any(BankConfigRespDto.class), any(String.class), any(TypeReference.class));
 
-        // Assert
+        Result<List<InAccRecordSaveReqDto>> result = bankCMBCloudSMService.refreshRecordListHis(reqDto, bankConfigRespDto);
+
+        assertFalse(result.isSuccess());
+        assertTrue(result.getMessage().contains("Historic Head Error"));
+    }
+
+    @Test
+    void testRefreshRecordListHis_EmptyResponse() throws ParseException {
+        RefreshRecordListHisReqDto reqDto = new RefreshRecordListHisReqDto();
+        reqDto.setStartDate(bankDateFormat.parse("20230101"));
+        reqDto.setEndDate(bankDateFormat.parse("20230101"));
+
+        CMBCloudBaseRespDto<CMBCloudQueryRecordHisRespBodyDto> mockResponse =
+            createMockHisResponse(new ArrayList<>(), "", false, null, null);
+
+        doReturn(mockResponse).when(bankCMBCloudSMService).postToBank(any(CMBCloudQueryRecordHisReqBodyDto.class), eq("NTDMTHLS"), any(BankConfigRespDto.class), any(String.class), any(TypeReference.class));
+
+        Result<List<InAccRecordSaveReqDto>> result = bankCMBCloudSMService.refreshRecordListHis(reqDto, bankConfigRespDto);
+
         assertTrue(result.isSuccess());
-        ArgumentCaptor<CMBCloudNTOPRDMRReqBodyDto> captor = ArgumentCaptor.forClass(CMBCloudNTOPRDMRReqBodyDto.class);
-        verify(bankCMBCloudSMService).postToBank(captor.capture(), eq("NTOPRDMR"), any(), anyString(), any());
-        CMBCloudNTOPRDMRReqBodyDto capturedBody = captor.getValue();
-        CMBCloudNTOPRDMRReqNtoprdmrx1Dto r1 = capturedBody.getNtoprdmrx1().get(0);
-        assertEquals("资金原路返回交易", r1.getNusage());
+        assertNotNull(result.getData());
+        assertTrue(result.getData().isEmpty());
     }
 }

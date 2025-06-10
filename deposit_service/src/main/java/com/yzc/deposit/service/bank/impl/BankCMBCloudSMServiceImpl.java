@@ -253,16 +253,133 @@ public class BankCMBCloudSMServiceImpl implements IBankAdapterService {
     @Override
     public Result<List<InAccRecordSaveReqDto>> refreshRecordListToday(RefreshRecordListTodayReqDto reqDto, BankConfigRespDto bankConfigRespDto) {
         String logStr = "CMBCloudSM[refreshRecordListToday]更新当日数据===>";
+        log.info("{}收到请求: reqDto={}, bankConfigRespDto={}", logStr, JSONUtil.toJsonStr(reqDto), JSONUtil.toJsonStr(bankConfigRespDto));
 
-        //1.转为银行入参
+        List<InAccRecordSaveReqDto> allRecords = new ArrayList<>();
+        String continueKey = reqDto.getContinueKey(); // Initial continue key from request
 
-        //2.调用银行接口
+        do {
+            // 1.转为银行入参
+            CMBCloudQueryRecordTodayReqBodyDto body = new CMBCloudQueryRecordTodayReqBodyDto();
+            CMBCloudQueryRecordTodayReqNtdmtlstyDto ntdmtlstyDto = new CMBCloudQueryRecordTodayReqNtdmtlstyDto();
+            ntdmtlstyDto.setAccnbr(bankConfigRespDto.getMainAccount());
+            ntdmtlstyDto.setDmanbr(StringUtils.isNotBlank(reqDto.getSubAcc()) ? reqDto.getSubAcc() : "");
+            if (StringUtils.isNotBlank(continueKey)) {
+                ntdmtlstyDto.setCtnkey(continueKey);
+            }
+            body.setNtdmtlsty(List.of(ntdmtlstyDto));
 
-        //3.解析返回结果
+            // 2.调用银行接口
+            String funcode = "NTDMTLST";
+            CMBCloudBaseRespDto<CMBCloudQueryRecordTodayRespBodyDto> rst = postToBank(body, funcode, bankConfigRespDto, logStr, new TypeReference<>() {});
 
-        //4.将结果转换为数据库InAccRecordSaveReqDto对象集合
+            // 3.解析返回结果
+            if (ObjectUtil.isNull(rst) || ObjectUtil.isNull(rst.getResponse()) ||
+                    ObjectUtil.isNull(rst.getResponse().getHead()) || ObjectUtil.isNull(rst.getResponse().getBody())) {
+                log.error("{}更新当日数据失败[银行返回为空或结构错误]", logStr);
+                return Result.error("更新当日数据失败[银行返回为空或结构错误]");
+            }
 
-        return Result.success();
+            CMBCloudCommonRespHeadDto respHeadDto = rst.getResponse().getHead();
+            if (ObjectUtil.notEqual(respHeadDto.getResultcode(), SUCCESS_CODE)) {
+                log.error("{}更新当日数据失败[银行头部返回错误]: code={}, msg={}", logStr, respHeadDto.getResultcode(), respHeadDto.getResultmsg());
+                return Result.error("更新当日数据失败[" + respHeadDto.getResultmsg() + "]");
+            }
+
+            CMBCloudQueryRecordTodayRespBodyDto respBodyDto = rst.getResponse().getBody();
+            // 检查 ntdmtlstz1 中的业务错误
+            if (CollectionUtil.isNotEmpty(respBodyDto.getNtdmtlstz1())) {
+                CMBCloudQueryRecordTodayRespNtdmtlstz1Dto errorStatus = respBodyDto.getNtdmtlstz1().get(0);
+                if (ObjectUtil.notEqual(errorStatus.getErrcod(), SUCCESS_CODE)) {
+                    log.error("{}更新当日数据业务失败[银行返回错误码]: code={}, msg={}", logStr, errorStatus.getErrcod(), errorStatus.getErrtxt());
+                    return Result.error("更新当日数据失败[" + errorStatus.getErrtxt() + "]");
+                }
+            }
+
+            // 4.将结果转换为数据库InAccRecordSaveReqDto对象集合
+            List<InAccRecordSaveReqDto> currentBatchRecords = new ArrayList<>();
+            if (CollectionUtil.isNotEmpty(respBodyDto.getNtdmtlstz())) {
+                for (CMBCloudQueryRecordTodayItemDto itemDto : respBodyDto.getNtdmtlstz()) {
+                    InAccRecordSaveReqDto record = new InAccRecordSaveReqDto();
+                    record.setBankTransNo(itemDto.getTrxnbr());
+                    try {
+                        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd");
+                        SimpleDateFormat timeFormat = new SimpleDateFormat("HHmmss");
+                        Date trxDate = dateFormat.parse(itemDto.getTrxdat());
+                        Date trxTime = timeFormat.parse(itemDto.getTrxtim());
+                        record.setTransDate(new Date(trxDate.getTime() + trxTime.getTime())); // Combine date and time
+                    } catch (Exception e) {
+                        log.error("{}日期或时间解析失败: trxdat={}, trxtim={}", logStr, itemDto.getTrxdat(), itemDto.getTrxtim(), e);
+                    }
+                    record.setTransAmount(itemDto.getTrsam());
+                    record.setPayAccNo(itemDto.getCltacc());
+                    record.setPayAccName(itemDto.getCltnam());
+                    record.setReceiveAccNo(itemDto.getEtyacc()); // 主账号或子账号
+                    record.setReceiveAccName(itemDto.getEtynam());
+                    record.setSummary(itemDto.getNaryur());
+                    record.setSubAcc(itemDto.getDmanbr()); // 交易发生的子账号
+                    record.setTransStatus(itemDto.getRtnsts()); // 可能需要映射
+                    record.setCurrency(itemDto.getCcynbr());
+                    record.setBankType(bankConfigRespDto.getBankTypeCode());
+                    record.setTenantId(reqDto.getTenantId());
+                    // DCFLAG: D-借方（支出） C-贷方（收入）
+                    if ("D".equals(itemDto.getDcflag())) {
+                        record.setTransType(2); // 支出
+                    } else if ("C".equals(itemDto.getDcflag())) {
+                        record.setTransType(1); // 收入
+                    }
+                    currentBatchRecords.add(record);
+                }
+            }
+            // Ntdmtlstz2 结构与 Ntdmtlstz 相同
+            if (CollectionUtil.isNotEmpty(respBodyDto.getNtdmtlstz2())) {
+                 for (CMBCloudQueryRecordTodayItemDto itemDto : respBodyDto.getNtdmtlstz2()) {
+                    InAccRecordSaveReqDto record = new InAccRecordSaveReqDto();
+                    record.setBankTransNo(itemDto.getTrxnbr());
+                     try {
+                         SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd");
+                         SimpleDateFormat timeFormat = new SimpleDateFormat("HHmmss");
+                         Date trxDate = dateFormat.parse(itemDto.getTrxdat());
+                         Date trxTime = timeFormat.parse(itemDto.getTrxtim());
+                         record.setTransDate(new Date(trxDate.getTime() + trxTime.getTime())); // Combine date and time
+                     } catch (Exception e) {
+                         log.error("{}日期或时间解析失败: trxdat={}, trxtim={}", logStr, itemDto.getTrxdat(), itemDto.getTrxtim(), e);
+                     }
+                    record.setTransAmount(itemDto.getTrsam());
+                    record.setPayAccNo(itemDto.getCltacc());
+                    record.setPayAccName(itemDto.getCltnam());
+                    record.setReceiveAccNo(itemDto.getEtyacc());
+                    record.setReceiveAccName(itemDto.getEtynam());
+                    record.setSummary(itemDto.getNaryur());
+                    record.setSubAcc(itemDto.getDmanbr());
+                    record.setTransStatus(itemDto.getRtnsts());
+                    record.setCurrency(itemDto.getCcynbr());
+                    record.setBankType(bankConfigRespDto.getBankTypeCode());
+                    record.setTenantId(reqDto.getTenantId());
+                    if ("D".equals(itemDto.getDcflag())) {
+                        record.setTransType(2); // 支出
+                    } else if ("C".equals(itemDto.getDcflag())) {
+                        record.setTransType(1); // 收入
+                    }
+                    currentBatchRecords.add(record);
+                }
+            }
+
+            allRecords.addAll(currentBatchRecords);
+
+            // 处理分页: 检查响应中的 ntdmtlsty 是否有 ctnkey
+            if (CollectionUtil.isNotEmpty(respBodyDto.getNtdmtlsty()) &&
+                respBodyDto.getNtdmtlsty().get(0) != null &&
+                StringUtils.isNotBlank(respBodyDto.getNtdmtlsty().get(0).getCtnkey())) {
+                continueKey = respBodyDto.getNtdmtlsty().get(0).getCtnkey();
+            } else {
+                continueKey = null; // No more pages
+            }
+
+        } while (StringUtils.isNotBlank(continueKey));
+
+        log.info("{}成功获取 {} 条当日流水记录", logStr, allRecords.size());
+        return Result.success(allRecords);
     }
 
     /**
@@ -341,16 +458,124 @@ public class BankCMBCloudSMServiceImpl implements IBankAdapterService {
      */
     public Result<List<InAccRecordSaveReqDto>> refreshRecordListHis(RefreshRecordListHisReqDto reqDto, BankConfigRespDto bankConfigRespDto) {
         String logStr = "CMBCloudSM[refreshRecordListHis]更新历史数据===>";
+        log.info("{}收到请求: reqDto={}, bankConfigRespDto={}", logStr, JSONUtil.toJsonStr(reqDto), JSONUtil.toJsonStr(bankConfigRespDto));
 
-        //1.转为银行入参
+        List<InAccRecordSaveReqDto> allRecords = new ArrayList<>();
+        String continueKey = reqDto.getContinueKey(); // Initial continue key from request
+        SimpleDateFormat bankDateFormat = new SimpleDateFormat("yyyyMMdd");
 
-        //2.调用银行接口
+        do {
+            // 1.转为银行入参
+            CMBCloudQueryRecordHisReqBodyDto body = new CMBCloudQueryRecordHisReqBodyDto();
+            CMBCloudQueryRecordHisReqNtdmthlsyDto ntdmthlsyDto = new CMBCloudQueryRecordHisReqNtdmthlsyDto();
+            ntdmthlsyDto.setAccnbr(bankConfigRespDto.getMainAccount());
+            ntdmthlsyDto.setDmanbr(StringUtils.isNotBlank(reqDto.getSubAcc()) ? reqDto.getSubAcc() : "");
+            ntdmthlsyDto.setBegdat(bankDateFormat.format(reqDto.getStartDate()));
+            ntdmthlsyDto.setEnddat(bankDateFormat.format(reqDto.getEndDate()));
+            if (StringUtils.isNotBlank(continueKey)) {
+                ntdmthlsyDto.setCtnkey(continueKey);
+            }
+            body.setNtdmthlsy(List.of(ntdmthlsyDto));
 
-        //3.解析返回结果
+            // 2.调用银行接口
+            String funcode = "NTDMTHLS";
+            CMBCloudBaseRespDto<CMBCloudQueryRecordHisRespBodyDto> rst = postToBank(body, funcode, bankConfigRespDto, logStr, new TypeReference<>() {});
 
-        //4.将结果转换为数据库InAccRecordSaveReqDto对象集合
+            // 3.解析返回结果
+            if (ObjectUtil.isNull(rst) || ObjectUtil.isNull(rst.getResponse()) ||
+                    ObjectUtil.isNull(rst.getResponse().getHead()) || ObjectUtil.isNull(rst.getResponse().getBody())) {
+                log.error("{}更新历史数据失败[银行返回为空或结构错误]", logStr);
+                return Result.error("更新历史数据失败[银行返回为空或结构错误]");
+            }
 
-        return Result.success();
+            CMBCloudCommonRespHeadDto respHeadDto = rst.getResponse().getHead();
+            if (ObjectUtil.notEqual(respHeadDto.getResultcode(), SUCCESS_CODE)) {
+                log.error("{}更新历史数据失败[银行头部返回错误]: code={}, msg={}", logStr, respHeadDto.getResultcode(), respHeadDto.getResultmsg());
+                return Result.error("更新历史数据失败[" + respHeadDto.getResultmsg() + "]");
+            }
+
+            CMBCloudQueryRecordHisRespBodyDto respBodyDto = rst.getResponse().getBody();
+            // 检查 ntdmthlsz1 中的业务错误 (银行文档中历史查询没有ntdmthlsz1这一层，直接是ntdmthlsz，但为保险起见，保留对通用错误节点的检查逻辑，如果确定不需要可以移除)
+            // 根据实际的招行SM接口文档，NTDMTHLS响应体中没有ntdmthlsz1错误节点，错误在ntdmthlsy中体现或直接在head中。
+            // 此处我们假设错误信息可能在 ntdmthlsy 的 errcod/errtxt 或者 head
+            if (CollectionUtil.isNotEmpty(respBodyDto.getNtdmthlsy())) {
+                 CMBCloudQueryRecordHisRespNtdmthlsyDto statusNode = respBodyDto.getNtdmthlsy().get(0);
+                 // 银行历史流水接口中，ntdmthlsy节点主要用于返回分页信息和可能的处理结果，具体错误通常在head或业务列表为空时体现。
+                 // 有些银行接口会在这个节点也包含错误码。如果文档确认这里有errcod，则进行判断。
+                 // if (ObjectUtil.isNotNull(statusNode.getErrcod()) && ObjectUtil.notEqual(statusNode.getErrcod(), SUCCESS_CODE)) {
+                 //    log.error("{}更新历史数据业务失败[银行返回错误码]: code={}, msg={}", logStr, statusNode.getErrcod(), statusNode.getErrtxt());
+                 //    return Result.error("更新历史数据失败[" + statusNode.getErrtxt() + "]");
+                 // }
+            }
+
+
+            // 4.将结果转换为数据库InAccRecordSaveReqDto对象集合
+            List<InAccRecordSaveReqDto> currentBatchRecords = new ArrayList<>();
+            if (CollectionUtil.isNotEmpty(respBodyDto.getNtdmthlsz())) {
+                for (CMBCloudQueryRecordHisItemDto itemDto : respBodyDto.getNtdmthlsz()) {
+                    InAccRecordSaveReqDto record = convertHisItemToSaveReqDto(itemDto, bankConfigRespDto, reqDto, logStr);
+                    currentBatchRecords.add(record);
+                }
+            }
+            // Ntdmthlsz2 结构与 Ntdmthlsz 相同
+            if (CollectionUtil.isNotEmpty(respBodyDto.getNtdmthlsz2())) {
+                 for (CMBCloudQueryRecordHisItemDto itemDto : respBodyDto.getNtdmthlsz2()) {
+                    InAccRecordSaveReqDto record = convertHisItemToSaveReqDto(itemDto, bankConfigRespDto, reqDto, logStr);
+                    currentBatchRecords.add(record);
+                }
+            }
+
+            allRecords.addAll(currentBatchRecords);
+
+            // 处理分页: 检查响应中的 ntdmthlsy 是否有 ctnkey
+            if (CollectionUtil.isNotEmpty(respBodyDto.getNtdmthlsy()) &&
+                respBodyDto.getNtdmthlsy().get(0) != null &&
+                StringUtils.isNotBlank(respBodyDto.getNtdmthlsy().get(0).getCtnkey())) {
+                continueKey = respBodyDto.getNtdmthlsy().get(0).getCtnkey();
+            } else {
+                continueKey = null; // No more pages
+            }
+
+        } while (StringUtils.isNotBlank(continueKey));
+
+        log.info("{}成功获取 {} 条历史流水记录", logStr, allRecords.size());
+        return Result.success(allRecords);
+    }
+
+    private InAccRecordSaveReqDto convertHisItemToSaveReqDto(CMBCloudQueryRecordHisItemDto itemDto, BankConfigRespDto bankConfigRespDto, RefreshRecordListHisReqDto reqDto, String logStr) {
+        InAccRecordSaveReqDto record = new InAccRecordSaveReqDto();
+        record.setBankTransNo(itemDto.getTrxnbr());
+        try {
+            //历史流水通常只有日期，没有精确到时分秒的 trxtim 字段，如果银行返回了，则解析，否则只用日期
+            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd");
+            Date trxDate = dateFormat.parse(itemDto.getTrxdat());
+            if (StringUtils.isNotBlank(itemDto.getTrxtim())) {
+                 SimpleDateFormat timeFormat = new SimpleDateFormat("HHmmss");
+                 Date trxTime = timeFormat.parse(itemDto.getTrxtim());
+                 record.setTransDate(new Date(trxDate.getTime() + trxTime.getTime())); // Combine date and time
+            } else {
+                 record.setTransDate(trxDate);
+            }
+        } catch (Exception e) {
+            log.error("{}日期或时间解析失败: trxdat={}, trxtim={}", logStr, itemDto.getTrxdat(), itemDto.getTrxtim(), e);
+        }
+        record.setTransAmount(itemDto.getTrsam());
+        record.setPayAccNo(itemDto.getCltacc());
+        record.setPayAccName(itemDto.getCltnam());
+        record.setReceiveAccNo(itemDto.getEtyacc());
+        record.setReceiveAccName(itemDto.getEtynam());
+        record.setSummary(itemDto.getNaryur());
+        record.setSubAcc(itemDto.getDmanbr());
+        record.setTransStatus(itemDto.getRtnsts());
+        record.setCurrency(itemDto.getCcynbr());
+        record.setBankType(bankConfigRespDto.getBankTypeCode());
+        record.setTenantId(reqDto.getTenantId());
+        if ("D".equals(itemDto.getDcflag())) {
+            record.setTransType(2); // 支出
+        } else if ("C".equals(itemDto.getDcflag())) {
+            record.setTransType(1); // 收入
+        }
+        return record;
     }
 
     /****************************************公共方法************************************************************************/
